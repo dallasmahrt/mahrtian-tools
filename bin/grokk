@@ -1,0 +1,12 @@
+#!/bin/bash
+# Grep all files with a specific extension
+# Usage: grokk <ext> <string> [grep options]
+ext=$1
+shift 
+str=$1
+shift
+if [ $# -gt 2 ] ; then  
+  grep_args = $3
+fi
+
+find . -name \*.$ext | xargs grep -n $grep_args "$str" 

@@ -1,0 +1,123 @@
+#!/usr/bin/env ruby
+require 'optparse'
+require 'statsample'
+
+class StatsIt
+
+  def initialize
+    @options = {
+      :delimiter => ' ',
+      :fields => [],
+      :stats => {
+        :count => true,
+        :min => true,
+        :max => true, 
+        :mean => true,
+        :median => true, 
+        :stdv => true,
+        :percentiles => []},
+      :input => :stdin,
+      :output => :stdout
+    }
+    parse_options
+  end
+
+  def parse_options
+
+    OptionParser.new do |opts|
+      opts.banner = "Usage: statsit [options]"
+      opts.on("-d", "--delim", "Delimiter to separate fields. Defaults to ' '") do |v|
+        @options[:delimiter] = v
+      end
+      opts.on("-f", "--field [INDEX=NAME]", "Field to analyize <index>[=<name>]. Defaults to first field.") do |v|
+        index, name = v.split("=")
+        name = "Field #{index}" if name.nil?
+        @options[:fields] << [index, name]
+      end
+      opts.on("-i", "--input [INPUT]", "Select the input source. Defaults to STDIN") do |v|
+        @options[:input] = v
+      end
+      opts.on("-o", "--output [OUTPUT]", "Select the output file. Defaults to stdout")  do |v|
+        @options[:output] = v
+      end
+      opts.on("-s", "--stats min,max,mean,median,stdv", Array, "Select statistics to output. Defaults to all") do |list|
+        stats = options[:stats]
+        stats.keys.each do |s|
+          next if s == :percentiles
+          stats[s] = v.member? s.to_s
+        end
+      end
+      opts.on("-p", "--pcnt XX,YY,ZZ", Array, "Select percentiles to calculate.") do |list|
+        list.each do |pcnt|
+          @options[:stats][:percentiles] << pcnt.to_i
+        end
+      end
+      opts.on("-h", "--help", "Print usage") do 
+        puts opts
+        exit
+      end
+    end.parse!
+  end
+
+  def get_infile
+    in_file = STDIN
+    if @options[:input] != :stdin
+      in_file = File.open(@options[:input])
+    end
+    in_file
+  end
+
+  def fetch_results
+    vectors = {}
+    in_file = get_infile
+    in_file.readlines.each do |line|
+      all_fields = line.split(@options[:delimiter]).reject { |f| f.strip.empty? }
+      @options[:fields].each do |field|
+        index = field[0].to_i
+        vectors[index] ||= []
+        vectors[index] << all_fields[index].to_f
+      end
+    end
+    in_file.close
+    vectors
+  end
+
+  def get_outfile
+    out_file = STDOUT
+    if @options[:output] != :stdout
+      out_file = File.open(@options[:output], "w")
+    end
+    out_file
+  end
+
+  def print_results(vectors)
+    out_file = get_outfile
+    @options[:fields].each do |field|
+      index = field[0].to_i
+      name = field[1]
+      data = vectors[index].to_scale
+      outmsg = "#{name}: "
+      outmsg += "count=%.d\t" % data.size if @options[:stats][:count]
+      outmsg += "min=%.04f\t" % data.min if @options[:stats][:min]
+      outmsg += "max=%.04f\t" % data.max if @options[:stats][:max]
+      outmsg += "median=%.04f\t" % data.median if @options[:stats][:median]
+      outmsg += "mean=%.04f\t" % data.mean if @options[:stats][:mean]
+      outmsg += "stdv=%.04f\t" % data.sdp if @options[:stats][:stdv]
+      unless @options[:stats][:percentiles].empty?
+        @options[:stats][:percentiles].sort.each do |percentile|
+          outmsg += "pcnt#{percentile}=%.04f\t" % data.percentil(percentile)
+        end
+      end
+      out_file.puts outmsg
+    end
+    out_file.close
+  end
+
+  def run
+    vectors = fetch_results
+    print_results(vectors)
+  end
+end
+
+statsit = StatsIt.new
+statsit.run

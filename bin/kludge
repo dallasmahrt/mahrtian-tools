@@ -1,0 +1,9 @@
+#!/bin/sh
+# Record horrible kludges I make so I can find a record of them
+cmd=$@
+echo "'$cmd'"
+CURR_TIME=`date`
+`$cmd`
+if [ $? ]; then
+  echo "$CURR_TIME::'$cmd'" >> ~/.kludges
+fi
